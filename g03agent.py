@@ -30,6 +30,7 @@ class G03Agent:
             env: The OurHexGame environment instance.
         """
         self.player_id = player_id  # Player identifier
+        #Extract dimensions from the environment
         self.state_size = env.observation_spaces[player_id]["observation"].shape[0] * env.observation_spaces[player_id]["observation"].shape[1]
         self.action_size = env.action_spaces[player_id].n
 
