@@ -22,7 +22,7 @@ class QNetwork(nn.Module):
 
 
 class G03Agent:
-    def __init__(self, env, player_id="player_1", gamma=0.99, epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.995, learning_rate=1e-3, buffer_size=10000):
+    def __init__(self, env, player_id="player_1", gamma=0.99, epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.995, learning_rate=1e-3, buffer_size=10000, c=1.0):
         """
         Initialize the agent for the given environment.
 
@@ -30,7 +30,6 @@ class G03Agent:
             env: The OurHexGame environment instance.
         """
         self.player_id = player_id  # Player identifier
-        #Extract dimensions from the environment
         self.state_size = env.observation_spaces[player_id]["observation"].shape[0] * env.observation_spaces[player_id]["observation"].shape[1]
         self.action_size = env.action_spaces[player_id].n
 
@@ -39,6 +38,12 @@ class G03Agent:
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
         self.learning_rate = learning_rate
+
+        self.action_counts = np.zeros(self.action_size)  
+        self.total_action_count = 0 
+
+        self.c = c
+
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -81,10 +86,35 @@ class G03Agent:
             return len(action_mask) - 1  # Last action corresponds to Pie Rule
 
         # Regular epsilon-greedy action selection
+        '''
         if random.random() < self.epsilon:
             # Choose a random valid action
             valid_actions = np.where(action_mask == 1)[0]
             return int(random.choice(valid_actions))
+        '''
+        if random.random() < self.epsilon:
+            # Using UCB
+            self.total_action_count += 1
+            state_tensor = torch.FloatTensor(observation["observation"].flatten()).unsqueeze(0).to(self.device)
+
+            # Predict Q-values for all actions
+            with torch.no_grad():
+                q_values = self.q_network(state_tensor).cpu().numpy()[0]
+
+            # Mask invalid actions by setting their Q-values to a very low value
+            q_values = np.where(action_mask, q_values, -np.inf)
+
+            # Apply UCB formula to modify Q-values
+            ucb_values = q_values + self.c * np.sqrt(np.log(self.total_action_count + 1) / (self.action_counts + 1e-5))
+            valid_ucb_values = np.where(action_mask, ucb_values, -np.inf)
+
+            # Select the best valid action based on UCB
+            best_ucb_action = int(np.argmax(valid_ucb_values))
+            
+            # Update action counts
+            self.action_counts[best_ucb_action] += 1
+
+            return best_ucb_action
 
         # Predict Q-values for all actions
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
