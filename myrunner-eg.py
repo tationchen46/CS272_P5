@@ -45,7 +45,7 @@ while not done:
         
         step_count += 1
 
-# 승자 출력
+# Print Winner
 if env.rewards['player_1'] > env.rewards['player_2']:
     print("Player 1 (Red) wins!")
 elif env.rewards['player_1'] < env.rewards['player_2']:
